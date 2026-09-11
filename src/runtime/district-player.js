@@ -4,7 +4,7 @@ export function createDistrictPlayer({ $, $$, open, esc, onCleanup, isReduced, r
   const story=recordings[slug];if(!story)return;
   const topic=topicId?story.topics.find(t=>t.id===topicId):null;
   if(topicId&&!topic)return;
-  const from=topic?.start||0,to=topic?.end||story.scenes.at(-1).end;
+  let from=topic?.start||0,to=topic?.end||story.scenes.at(-1).end;
   const scenes=story.scenes.filter(s=>s.end>from&&s.start<to);
   let current=-1,disposed=false,english=false,finished=false,ticket=0;
   const media=new Audio(story.audio);media.preload='metadata';media.volume=1;
@@ -35,7 +35,20 @@ export function createDistrictPlayer({ $, $$, open, esc, onCleanup, isReduced, r
   $('#recording-mute').onclick=()=>{media.muted=!media.muted;if(!media.muted&&media.volume===0){media.volume=1;$('#recording-volume').value=1}controls()};
   $('#recording-captions').onclick=()=>{english=!english;$('#recording-captions').setAttribute('aria-pressed',english);sync()};
   $('#recording-fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('#cinema').requestFullscreen()}catch{status('Fullscreen is unavailable in this browser.')}};
-  media.onloadedmetadata=()=>{if(disposed)return;if(media.duration+0.5<to){ticket++;media.pause();status('This recording is shorter than its scene timeline. The creator needs to correct the timestamps.');$('#recording-play').disabled=true;return;}seek(from);};
+  media.onloadedmetadata=()=>{
+   if(disposed)return;
+   const scale = media.duration / to;
+   if (isFinite(scale) && scale > 0) {
+      scenes.forEach(s => { s.start *= scale; s.end *= scale; });
+      from *= scale;
+      to = media.duration;
+      $('#recording-seek').max = to;
+      $$('[data-recording-scene] span:first-child').forEach((el, i) => {
+         el.textContent = format(Math.max(from, scenes[i].start) - from);
+      });
+   }
+   seek(from);
+  };
   media.ontimeupdate=sync;media.onplay=controls;media.onpause=controls;media.onended=()=>{finished=true;controls();status('વાર્તા પૂરી થઈ.');};media.onwaiting=()=>status('અવાજ લોડ થઈ રહ્યો છે…');media.onerror=()=>status('Audio could not load. Check the connection and try Play again.');
   const visibility=()=>{if(document.hidden){ticket++;media.pause()}};document.addEventListener('visibilitychange',visibility);
   sync();play();
